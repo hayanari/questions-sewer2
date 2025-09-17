@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { type Question, type GradingResult } from '../types';
 
@@ -13,29 +12,29 @@ const gradingSchema = {
     properties: {
         rubricScores: {
             type: Type.ARRAY,
-            description: "An array of rubric items with scores and feedback.",
+            description: "各ルーブリック項目ごとのスコアとフィードバックの配列です。",
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    criterion: { type: Type.STRING, description: "The evaluation criterion (e.g., '正確性', '網羅性', '論理構成')."},
-                    score: { type: Type.INTEGER, description: "Score for this criterion." },
-                    maxScore: { type: Type.INTEGER, description: "Maximum possible score for this criterion." },
-                    feedback: { type: Type.STRING, description: "Specific feedback for this criterion." },
+                    criterion: { type: Type.STRING, description: "評価基準（例：「正確性」「網羅性」「論理構成」）です。"},
+                    score: { type: Type.INTEGER, description: "この基準のスコアです。" },
+                    maxScore: { type: Type.INTEGER, description: "この基準の最大スコアです。" },
+                    feedback: { type: Type.STRING, description: "この基準に関する具体的なフィードバックです。" },
                 },
                 required: ["criterion", "score", "maxScore", "feedback"]
             }
         },
         similarityScore: {
             type: Type.INTEGER,
-            description: "A score from 0 to 100 indicating the semantic similarity between the user's answer and the model answer."
+            description: "ユーザーの回答と模範解答の意味的な類似度を示す0から100のスコアです。"
         },
         overallScore: {
             type: Type.INTEGER,
-            description: "The final overall score, calculated as a percentage (0-100)."
+            description: "最終的な総合スコアで、パーセンテージ（0-100）で計算されます。"
         },
         overallFeedback: {
             type: Type.STRING,
-            description: "A comprehensive, constructive, and encouraging overall feedback summary for the user."
+            description: "ユーザーに対する包括的で、建設的で、励みになるような総合的なフィードバックの要約です。"
         }
     },
     required: ["rubricScores", "similarityScore", "overallScore", "overallFeedback"]
@@ -82,7 +81,7 @@ ${userAnswer}
             },
         });
 
-        const jsonText = response.text;
+        const jsonText = response.text.trim();
         const result = JSON.parse(jsonText) as GradingResult;
         
         // Basic validation
@@ -93,7 +92,9 @@ ${userAnswer}
         return result;
     } catch (error) {
         console.error("Error calling Gemini API:", error);
-        throw new Error("Failed to get a valid response from the AI. The model may be overloaded. Please try again.");
+        if (error instanceof Error && error.message.includes('429')) {
+             throw new Error("現在サーバーが混み合っています。しばらくしてから再度お試しください。");
+        }
+        throw new Error("AIからの応答取得に失敗しました。モデルが過負荷になっているか、不正な応答を返した可能性があります。");
     }
 };
-   
