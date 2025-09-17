@@ -1,0 +1,5 @@
+{
+  "name": "Exam Prep AI Grader",
+  "description": "An application for students to practice for exams. Users answer questions, and the Gemini API provides a detailed score and feedback based on a model answer.",
+  "requestFramePermissions": []
+}
