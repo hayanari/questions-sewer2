@@ -1,4 +1,5 @@
-streamlit
-google-generativeai>=0.7.2
-Secretsの設定（Streamlit Cloud）
-GEMINI_API_KEY = "AIzaSyDBbJhzersbxji9BSqxtn3GppNNvAwzVqY"
+streamlit==1.37.1
+google-generativeai==0.7.2
+protobuf>=3.20,<5
+pydantic<3
+
