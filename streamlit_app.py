@@ -90,9 +90,9 @@ if do_eval:
     prompt = build_prompt(problem, student, reference, score_max, strictness)
 
     try:
-        with st.spinner("Geminiが採点中…"):
-            model = genai.GenerativeModel(MODEL_NAME)
-            resp = model.generate_content(prompt)
-    except Exception as e:
+    with st.spinner("Geminiが採点中…"):
+        model = genai.GenerativeModel(MODEL_NAME)
+        resp = model.generate_content(prompt)
+except Exception as e:
     st.error(f"API呼び出しでエラー: {e}")
     st.stop()
