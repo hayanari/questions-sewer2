@@ -23,7 +23,7 @@ except json.JSONDecodeError as e:
     st.stop()
 
 # ====== UI ======
-st.title("📝 Exam Prep AI Grader (Gemini)")
+st.title("📝試験対策アプリ")
 st.markdown("出題を選んで受験者の解答を入力すると、AI が **10点満点** で採点します。")
 
 # プルダウンで問題選択
