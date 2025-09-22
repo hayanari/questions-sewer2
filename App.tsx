@@ -9,6 +9,7 @@ import { ErrorDisplay } from './components/ErrorDisplay';
 import { gradeAnswer } from './services/geminiService';
 import { QUESTIONS } from './constants';
 import { type Question, type GradingResult } from './types';
+import { ModelAnswerDisplay } from './components/ModelAnswerDisplay';
 
 export default function App() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -16,6 +17,7 @@ export default function App() {
   const [gradingResult, setGradingResult] = useState<GradingResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showModelAnswer, setShowModelAnswer] = useState(false);
 
   const currentQuestion: Question = QUESTIONS[currentQuestionIndex];
 
@@ -31,6 +33,7 @@ export default function App() {
     setIsLoading(true);
     setError(null);
     setGradingResult(null);
+    setShowModelAnswer(false);
 
     try {
       const result = await gradeAnswer(currentQuestion, userAnswer);
@@ -47,6 +50,7 @@ export default function App() {
     setUserAnswer('');
     setGradingResult(null);
     setError(null);
+    setShowModelAnswer(false);
     setCurrentQuestionIndex((prevIndex) => (prevIndex + 1) % QUESTIONS.length);
   };
 
@@ -75,7 +79,20 @@ export default function App() {
           {gradingResult && (
             <div className="animate-fade-in">
               <GradingResultDisplay result={gradingResult} />
-              <div className="mt-8 text-center">
+              
+              {showModelAnswer && (
+                  <ModelAnswerDisplay answer={currentQuestion.modelAnswer} />
+              )}
+
+              <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
+                {!showModelAnswer && (
+                  <button
+                    onClick={() => setShowModelAnswer(true)}
+                    className="px-8 py-3 bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200 font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 focus:outline-none focus:ring-4 focus:ring-slate-300 dark:focus:ring-slate-800 transition-all duration-300 ease-in-out transform hover:scale-105"
+                  >
+                    模範解答を表示
+                  </button>
+                )}
                 <button
                   onClick={handleNextQuestion}
                   className="px-8 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-300 dark:focus:ring-indigo-800 transition-all duration-300 ease-in-out transform hover:scale-105"
