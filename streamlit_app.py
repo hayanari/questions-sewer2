@@ -7,8 +7,6 @@ import google.generativeai as genai
 st.set_page_config(page_title="Exam Prep AI Grader (Gemini)", page_icon="📝", layout="centered")
 
 # ====== APIキー設定（Secretsから取得） ======
-# Streamlit Cloud の [Advanced settings] → [Secrets] に
-# GEMINI_API_KEY="xxxxx" の形式で保存してください。
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=GEMINI_API_KEY)
 MODEL_NAME = "gemini-1.5-flash"  # 厳密評価にしたい場合は "gemini-1.5-pro"
@@ -26,9 +24,9 @@ except json.JSONDecodeError as e:
 
 # ====== UI ======
 st.title("📝 Exam Prep AI Grader (Gemini)")
-st.markdown("出題を選んで受験者の解答を入力すると、AI が採点します。")
+st.markdown("出題を選んで受験者の解答を入力すると、AI が **10点満点** で採点します。")
 
-# プルダウンで問題選択（id: subject）
+# プルダウンで問題選択
 options = {q["id"]: f"{q['id']}: {q.get('subject', 'No Subject')}" for q in QUESTIONS}
 selected_id = st.selectbox("出題を選んでください", options.keys(), format_func=lambda x: options[x])
 
@@ -46,22 +44,19 @@ with st.expander("📘 模範解答", expanded=False):
 
 student = st.text_area("🧑‍🎓 あなたの解答", height=200, placeholder="ここに回答を入力…")
 
-col1, col2 = st.columns(2)
-with col1:
-    score_max = st.selectbox("満点スコア", [10, 20, 100], index=0)
-with col2:
-    strictness = st.slider("採点の厳しさ（1=寛容, 5=非常に厳格）", 1, 5, 3)
+# 厳しさだけ調整可能
+strictness = st.slider("採点の厳しさ（1=寛容, 5=非常に厳格）", 1, 5, 3)
 
 do_eval = st.button("採点する")
 
 # ====== プロンプト生成関数 ======
-def build_prompt(problem, student, reference, score_max, strictness):
+def build_prompt(problem, student, reference, strictness):
     return f"""
 あなたは日本語の厳格な採点者です。与えられた問題文と受験者の解答を評価し、JSONで出力してください。
 
 出力は必ず次のJSONスキーマに従ってください（余計なテキストは出力しない）:
 {{
-  "score": <number 0-{score_max}>,
+  "score": <number 0-10>,
   "rubric": "採点基準の要約",
   "strengths": ["良い点1", "良い点2"],
   "weaknesses": ["不足点1", "不足点2"],
@@ -87,7 +82,7 @@ if do_eval:
         st.warning("⚠️ 問題文と受験者の解答は必須です。")
         st.stop()
 
-    prompt = build_prompt(problem, student, reference, score_max, strictness)
+    prompt = build_prompt(problem, student, reference, strictness)
 
     try:
         with st.spinner("Gemini が採点中…"):
@@ -109,7 +104,7 @@ if do_eval:
 
     # ====== 結果表示 ======
     st.success("✅ 採点完了")
-    st.metric("スコア", f"{data.get('score', 0)} / {score_max}")
+    st.metric("スコア", f"{data.get('score', 0)} / 10")
 
     st.subheader("採点基準（Rubric）")
     st.write(data.get("rubric", ""))
