@@ -4,7 +4,7 @@ import streamlit as st
 import google.generativeai as genai
 
 # ====== 基本設定 ======
-st.set_page_config(page_title="Exam Prep AI Grader (Gemini)", page_icon="📝", layout="centered")
+st.set_page_config(page_title="試験対策アプリ", page_icon="📝", layout="centered")
 
 # ====== APIキー設定（Secretsから取得） ======
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
