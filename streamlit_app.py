@@ -41,7 +41,7 @@ reference_default = selected_question.get("modelAnswer", "")
 st.subheader("🧩 問題文")
 st.write(problem)
 
-with st.expander("📘 模範解答（JSONから自動参照・編集可）", expanded=False):
+with st.expander("📘 模範解答", expanded=False):
     reference = st.text_area("模範解答", value=reference_default, height=140)
 
 student = st.text_area("🧑‍🎓 あなたの解答", height=200, placeholder="ここに回答を入力…")
