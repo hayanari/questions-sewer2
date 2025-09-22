@@ -26,7 +26,7 @@ except json.JSONDecodeError as e:
 
 # ====== UI ======
 st.title("📝 Exam Prep AI Grader (Gemini)")
-st.markdown("出題を選んで受験者の解答を入力すると、Gemini が採点します。")
+st.markdown("出題を選んで受験者の解答を入力すると、AI が採点します。")
 
 # プルダウンで問題選択（id: subject）
 options = {q["id"]: f"{q['id']}: {q.get('subject', 'No Subject')}" for q in QUESTIONS}
