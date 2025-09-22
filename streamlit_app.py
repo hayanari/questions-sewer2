@@ -1,16 +1,10 @@
-import os
 import json
 import streamlit as st
-
-# Gemini API
 import google.generativeai as genai
 
 # ====== 設定 ======
-# Streamlit Cloud では [App settings] → [Secrets] に "GEMINI_API_KEY" を保存してください
-GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
-if not GEMINI_API_KEY:
-    st.error("GEMINI_API_KEY が設定されていません。StreamlitのSecretsに追加してください。")
-    st.stop()
+# Streamlit Cloud の [Advanced settings] → [Secrets] に GEMINI_API_KEY を保存してください
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 
 genai.configure(api_key=GEMINI_API_KEY)
 MODEL_NAME = "gemini-1.5-flash"  # 速くて安価。厳密評価をしたい場合は gemini-1.5-pro へ
