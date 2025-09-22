@@ -94,4 +94,5 @@ if do_eval:
             model = genai.GenerativeModel(MODEL_NAME)
             resp = model.generate_content(prompt)
     except Exception as e:
-        st.error(f"API
+    st.error(f"API呼び出しでエラー: {e}")
+    st.stop()
