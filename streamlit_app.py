@@ -3,11 +3,11 @@ import json
 import requests
 import streamlit as st
 
-# ページ設定は1回だけ
-st.set_page_config(page_title="総合技士｜短答100字演習", page_icon="📝", layout="centered")
+# ① ページ設定は一度だけ
+st.set_page_config(page_title="総合技士試験対策AIアプリ｜短答100字演習", page_icon="📝", layout="centered")
 os.environ.setdefault("STREAMLIT_SERVER_FILE_WATCHER_TYPE", "none")
 
-# ===== パスワード認証 =====
+# ② パスワード認証（secrets に APP_PASSWORD を設定してください）
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
@@ -17,16 +17,14 @@ if not st.session_state.authenticated:
 
     if st.button("ログイン"):
         app_pw = st.secrets.get("APP_PASSWORD", "")
-        if pwd == app_pw and app_pw != "":
+        if app_pw and pwd == app_pw:
             st.session_state.authenticated = True
             st.success("ログイン成功！")
-            st.rerun()   # ← ここが修正ポイント
+            st.rerun()  # ← ここで再描画
         else:
-            st.error("パスワードが違うか、APP_PASSWORDが未設定です。")
+            st.error("パスワードが違うか、APP_PASSWORD が未設定です。")
 
-    st.stop()  # 認証成功まで以降の処理は実行しない
-# ================= 本体のアプリ処理 =================
-st.set_page_config(page_title="総合技士試験対策AIアプリ｜短答100字演習", page_icon="📝", layout="centered")
+    st.stop()  # ← 認証成功までは本体を実行しない
 # ================= 基本設定 =================
 st.set_page_config(page_title="総合技士試験対策AIアプリ｜短答100字演習", page_icon="📝", layout="centered")
 os.environ.setdefault("STREAMLIT_SERVER_FILE_WATCHER_TYPE", "none")
