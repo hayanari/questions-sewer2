@@ -113,12 +113,59 @@ with st.expander("🔧 診断（まずはここを開いて確認）", expanded=
 st.title("📝試験対策アプリ")
 st.markdown("出題を選んで受験者の解答を入力すると、AI が **10点満点** で採点します。")
 
-options = {q["id"]: f"{q['id']}: {q.get('subject','No Subject')}" for q in QUESTIONS}
-selected_id = st.selectbox("出題を選んでください", options.keys(), format_func=lambda x: options[x])
+# ===== 出題ナビ（戻る／次へ 付き） =====
+ID_TO_Q = {q["id"]: q for q in QUESTIONS}
+ORDERED_IDS = sorted(ID_TO_Q.keys())
 
-q = next(q for q in QUESTIONS if q["id"] == selected_id)
-problem = q.get("text", "")
-reference_default = q.get("modelAnswer", "")
+if "q_idx" not in st.session_state:
+    st.session_state.q_idx = 0
+
+def on_select_change():
+    sel_id = st.session_state.selected_id
+    st.session_state.q_idx = ORDERED_IDS.index(sel_id)
+
+def go_prev():
+    if st.session_state.q_idx > 0:
+        st.session_state.q_idx -= 1
+        st.session_state.selected_id = ORDERED_IDS[st.session_state.q_idx]
+
+def go_next():
+    if st.session_state.q_idx < len(ORDERED_IDS) - 1:
+        st.session_state.q_idx += 1
+        st.session_state.selected_id = ORDERED_IDS[st.session_state.q_idx]
+
+selected_id = st.selectbox(
+    "出題を選んでください",
+    options=ORDERED_IDS,
+    index=st.session_state.q_idx,
+    format_func=lambda i: f"{i}: {ID_TO_Q[i].get('subject','No Subject')}",
+    key="selected_id",
+    on_change=on_select_change,
+)
+
+c1, c2, c3 = st.columns([1, 1, 1])
+with c1:
+    st.button("← 戻る", use_container_width=True, on_click=go_prev,
+              disabled=(st.session_state.q_idx == 0))
+with c2:
+    st.markdown(
+        f"<div style='text-align:center; font-weight:600;'>"
+        f"{st.session_state.q_idx + 1} / {len(ORDERED_IDS)}</div>",
+        unsafe_allow_html=True
+    )
+with c3:
+    st.button("次へ →", use_container_width=True, on_click=go_next,
+              disabled=(st.session_state.q_idx == len(ORDERED_IDS) - 1))
+
+current_id = ORDERED_IDS[st.session_state.q_idx]
+selected_question = ID_TO_Q[current_id]
+problem = selected_question.get("text", "")
+reference_default = selected_question.get("modelAnswer", "")
+
+with st.expander("📘 模範解答", expanded=False):
+    reference = st.text_area("模範解答", value=reference_default, height=140, key=f"ref_{current_id}")
+student = st.text_area("🧑‍🎓 あなたの解答", height=200, placeholder="ここに回答を入力…", key=f"ans_{current_id}")
+
 
 st.subheader("🧩 問題文")
 st.write(problem)
