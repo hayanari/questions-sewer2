@@ -5,8 +5,6 @@ import streamlit as st
 
 # ================= 基本設定 =================
 st.set_page_config(page_title="第3節 下水道の種類｜短答100字演習", page_icon="📝", layout="centered")
-
-# （ストレージ監視で固まる環境向けの保険）
 os.environ.setdefault("STREAMLIT_SERVER_FILE_WATCHER_TYPE", "none")
 
 API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
@@ -14,7 +12,7 @@ if not API_KEY:
     st.error("❌ Secrets に GEMINI_API_KEY（または GOOGLE_API_KEY）がありません。")
     st.stop()
 
-# 優先順に試すモデル
+# モデル候補（順に試す）
 PREFERRED = [
     "gemini-1.5-pro-latest",
     "gemini-1.5-flash-latest",
@@ -25,23 +23,12 @@ PREFERRED = [
 ]
 
 # ================ ユーティリティ ================
-def list_models(api_ver: str, timeout=15) -> list[str]:
-    url = f"https://generativelanguage.googleapis.com/{api_ver}/models?key={API_KEY}"
-    r = requests.get(url, timeout=timeout)
-    r.raise_for_status()
-    j = r.json()
-    names = []
-    for m in j.get("models", []):
-        name = (m.get("name") or "").split("/")[-1]
-        methods = m.get("supportedGenerationMethods") or m.get("supported_generation_methods") or []
-        if "generateContent" in methods:
-            names.append(name)
-    return names
-
 def call_gemini(prompt: str, api_ver: str, model: str, timeout=30) -> str:
     url = f"https://generativelanguage.googleapis.com/{api_ver}/models/{model}:generateContent?key={API_KEY}"
-    payload = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
-               "generationConfig": {"temperature": 0}}
+    payload = {
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0},
+    }
     r = requests.post(url, json=payload, timeout=timeout)
     if r.status_code >= 400:
         raise RuntimeError(f"{api_ver}/{model}: HTTP {r.status_code}: {r.text[:400]}")
@@ -69,39 +56,6 @@ except FileNotFoundError:
 except json.JSONDecodeError as e:
     st.error(f"❌ constants.json のパースに失敗: {e}")
     st.stop()
-
-# ================ 診断UI ================
-with st.expander("🔧 診断（まずはここを開いて確認）", expanded=True):
-    st.write("- ここで **利用可能モデル** を実際に取得し、採点時の候補に使います。")
-    cols = st.columns(2)
-    if "ALL_MODELS" not in st.session_state:
-        st.session_state.ALL_MODELS = []
-    if "API_VER" not in st.session_state:
-        st.session_state.API_VER = "v1"  # 仮
-
-    if cols[0].button("モデル一覧取得（v1）"):
-        try:
-            names = list_models("v1")
-            st.session_state.ALL_MODELS = names
-            st.session_state.API_VER = "v1"
-            st.success(f"v1で取得：{len(names)}件")
-            st.code("\n".join(names) or "(なし)")
-        except Exception as e:
-            st.error(f"v1 取得失敗: {e}")
-
-    if cols[1].button("モデル一覧取得（v1beta）"):
-        try:
-            names = list_models("v1beta")
-            st.session_state.ALL_MODELS = names
-            st.session_state.API_VER = "v1beta"
-            st.success(f"v1betaで取得：{len(names)}件")
-            st.code("\n".join(names) or "(なし)")
-        except Exception as e:
-            st.error(f"v1beta 取得失敗: {e}")
-
-    if not st.session_state.ALL_MODELS:
-        st.info("モデル一覧が未取得なので、既定候補（PREFERRED）で試行します。")
-        st.code("\n".join(PREFERRED))
 
 # ================ メインUI ================
 st.title("第3節 下水道の種類｜短答100字演習")
@@ -157,15 +111,22 @@ selected_question = ID_TO_Q[current_id]
 problem = selected_question.get("text", "")
 reference_default = selected_question.get("modelAnswer", "")
 
-# --- 問題文と入力欄（1つだけ） ---
+# --- 問題文と入力欄 ---
 st.subheader("🧩 問題文")
 st.write(problem)
 
 with st.expander("📘 模範解答", expanded=False):
     reference = st.text_area("模範解答", value=reference_default, height=140, key=f"ref_{current_id}")
 
-student = st.text_area("🧑‍🎓 あなたの解答", height=200,
-                       placeholder="ここに回答を入力…", key=f"ans_{current_id}")
+student = st.text_area(
+    "🧑‍🎓 あなたの解答",
+    height=200,
+    placeholder="ここに回答を入力…",
+    key=f"ans_{current_id}",
+)
+
+# ★ 解答文字数カウンター（100字目安）
+st.caption(f"現在の文字数: {len(student)} / 100")
 
 strictness = st.slider("採点の厳しさ（1=寛容, 5=非常に厳格）", 1, 5, 3)
 do_eval = st.button("採点する")
@@ -192,8 +153,10 @@ if do_eval:
         st.stop()
 
     prompt = build_prompt(problem, student, reference, strictness)
-    api_versions = [st.session_state.API_VER] if st.session_state.ALL_MODELS else ["v1", "v1beta"]
-    model_pool = (st.session_state.ALL_MODELS or PREFERRED)
+
+    # v1 → v1beta の順で試す
+    api_versions = ["v1", "v1beta"]
+    model_pool = PREFERRED
 
     errors, text, used = [], None, None
     with st.spinner("Gemini が採点中…"):
@@ -209,7 +172,7 @@ if do_eval:
                 break
 
     if not text:
-        st.error("❌ すべての候補で失敗しました。直近のエラーを表示します。")
+        st.error("❌ すべての候補で失敗しました。")
         with st.expander("エラーログ（上から順に試行）"):
             st.code("\n\n".join(errors[-10:]) or "(なし)")
         st.stop()
@@ -222,28 +185,57 @@ if do_eval:
             st.code(text or "", language="json")
         st.stop()
 
+    # ======= 結果表示（整形版） =======
     st.success(f"✅ 採点完了（{used[0]} / {used[1]}）")
-    st.metric("スコア", f"{data.get('score', 0)} / 10")
 
-    st.subheader("採点基準（Rubric）")
+    score_val = data.get("score", 0)
+    st.markdown(
+        f"""
+        <div style="font-size:28px;font-weight:700;margin:8px 0 2px 0;">スコア</div>
+        <div style="font-size:42px;font-weight:800;line-height:1;">{score_val} / 10</div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.markdown("### 採点基準（Rubric）")
     st.write(data.get("rubric", ""))
 
-    colA, colB = st.columns(2)
-    with colA:
-        st.subheader("👍 良かった点")
-        for s in data.get("strengths", []):
-            st.markdown(f"- {s}")
-    with colB:
-        st.subheader("⚠️ 不足・誤り")
-        for w in data.get("weaknesses", []):
-            st.markdown(f"- {w}")
+    def norm_list(x):
+        if x is None: return []
+        if isinstance(x, str): return [x]
+        if isinstance(x, (list, tuple)): return [str(i) for i in x if str(i).strip()]
+        return [str(x)]
 
-    st.subheader("🛠 改善提案")
-    for i in data.get("improvements", []):
-        st.markdown(f"- {i}")
+    def render_bullets(items):
+        if not items:
+            st.markdown("- （記載なし）")
+            return
+        st.markdown("\n".join([f"- {i}" for i in items]))
 
-    with st.expander("🧠 採点ロジック（理由）"):
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("### 👍 良かった点")
+        render_bullets(norm_list(data.get("strengths")))
+    with col2:
+        st.markdown("### ⚠️ 不足・誤り")
+        render_bullets(norm_list(data.get("weaknesses")))
+
+    st.markdown("### 🛠 改善提案")
+    render_bullets(norm_list(data.get("improvements")))
+
+    with st.expander("🧠 採点ロジック（理由）", expanded=False):
         st.write(data.get("reasoning", ""))
+
+    # 箇条書きの余白調整
+    st.markdown(
+        """
+        <style>
+        ul { margin-top: 0.25rem; margin-bottom: 0.75rem; }
+        li { margin: 0.25rem 0; }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
 st.markdown("---")
 st.caption("Powered by Streamlit × Google Gemini（REST） ・ 問題データ: constants.json")
