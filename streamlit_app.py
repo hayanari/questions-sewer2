@@ -23,7 +23,7 @@ if not st.session_state.authenticated:
     st.stop()  # ここで処理終了 → 認証されるまで下は実行されない
 
 # ================= 本体のアプリ処理 =================
-st.set_page_config(page_title="第3節 下水道の種類｜短答100字演習", page_icon="📝", layout="centered")
+st.set_page_config(page_title="総合技士試験対策AIアプリ｜短答100字演習", page_icon="📝", layout="centered")
 # ================= 基本設定 =================
 st.set_page_config(page_title="総合技士試験対策AIアプリ｜短答100字演習", page_icon="📝", layout="centered")
 os.environ.setdefault("STREAMLIT_SERVER_FILE_WATCHER_TYPE", "none")
