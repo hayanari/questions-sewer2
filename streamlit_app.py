@@ -9,7 +9,7 @@ st.set_page_config(page_title="試験対策アプリ", page_icon="📝", layout=
 # ====== APIキー設定（Secretsから取得） ======
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=GEMINI_API_KEY)
-MODEL_NAME = "gemini-1.5-flash"  # 厳密評価にしたい場合は "gemini-1.5-pro"
+MODEL_NAME = "gemini-1.5-pro-latest"  # 厳密評価にしたい場合は "gemini-1.5-pro"
 
 # ====== constants.json を読み込む ======
 try:
