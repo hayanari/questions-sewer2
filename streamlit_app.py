@@ -1,28 +1,21 @@
 import os
 import json
+import requests
 import streamlit as st
-import google.generativeai as genai
 
-# --- Streamlit 基本設定 ---
+# --- 基本設定 ---
 st.set_page_config(page_title="試験対策アプリ", page_icon="📝", layout="centered")
 
-# --- APIキー ---
-GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+# --- APIキー（GOOGLE_API_KEY でも可） ---
+API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
+if not API_KEY:
+    st.error("❌ Secrets に GEMINI_API_KEY（または GOOGLE_API_KEY）が設定されていません。")
+    st.stop()
 
-# ★ v1 を強制（GenerativeModel 生成より前に必ず設定）
-os.environ["GOOGLE_API_USE_V1"] = "true"
+PRIMARY_MODEL = "gemini-1.5-pro-latest"    # 厳密評価
+FALLBACK_MODEL = "gemini-1.5-flash-latest" # 高速評価
 
-# ★ API エンドポイントを明示（念のため）
-genai.configure(
-    api_key=GEMINI_API_KEY,
-    client_options={"api_endpoint": "https://generativelanguage.googleapis.com"}
-)
-
-# 推奨モデル（厳密さ重視）：pro、速度重視：flash
-PRIMARY_MODEL = "gemini-1.5-pro-latest"
-FALLBACK_MODEL = "gemini-1.5-flash-latest"
-
-# --- 問題データ読込 ---
+# --- 問題データ ---
 try:
     with open("constants.json", "r", encoding="utf-8") as f:
         QUESTIONS = json.load(f)
@@ -30,19 +23,19 @@ except FileNotFoundError:
     st.error("❌ constants.json が見つかりません。リポジトリ直下に配置してください。")
     st.stop()
 except json.JSONDecodeError as e:
-    st.error(f"❌ constants.json のパースに失敗しました: {e}")
+    st.error(f"❌ constants.json のパースに失敗: {e}")
     st.stop()
 
 # --- UI ---
 st.title("📝試験対策アプリ")
 st.markdown("出題を選んで受験者の解答を入力すると、AI が **10点満点** で採点します。")
 
-options = {q["id"]: f"{q['id']}: {q.get('subject', 'No Subject')}" for q in QUESTIONS}
+options = {q["id"]: f"{q['id']}: {q.get('subject','No Subject')}" for q in QUESTIONS}
 selected_id = st.selectbox("出題を選んでください", options.keys(), format_func=lambda x: options[x])
 
-selected_question = next(q for q in QUESTIONS if q["id"] == selected_id)
-problem = selected_question.get("text", "")
-reference_default = selected_question.get("modelAnswer", "")
+q = next(q for q in QUESTIONS if q["id"] == selected_id)
+problem = q.get("text", "")
+reference_default = q.get("modelAnswer", "")
 
 st.subheader("🧩 問題文")
 st.write(problem)
@@ -69,6 +62,34 @@ def build_prompt(problem, student, reference, strictness):
 {reference}
 """
 
+# --- REST 呼び出し（v1固定・タイムアウト付） ---
+def call_gemini_v1(prompt: str, model: str, timeout: int = 30) -> str:
+    url = f"https://generativelanguage.googleapis.com/v1/models/{model}:generateContent?key={API_KEY}"
+    payload = {
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0}
+    }
+    r = requests.post(url, json=payload, timeout=timeout)
+    if r.status_code >= 400:
+        # エラー本文を短くして提示
+        raise RuntimeError(f"HTTP {r.status_code}: {r.text[:500]}")
+    j = r.json()
+    try:
+        return j["candidates"][0]["content"]["parts"][0]["text"]
+    except Exception as e:
+        raise RuntimeError(f"応答解析エラー: {e}\nRaw: {j}")
+
+def parse_json_loose(text: str) -> dict:
+    # ```json ～ ``` の除去や前後ノイズを吸収
+    t = text.strip()
+    if t.startswith("```"):
+        t = t.split("```", 2)[1] if "```" in t else t
+    start = t.find("{")
+    end = t.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        raise ValueError("JSONブロックが見つかりません。")
+    return json.loads(t[start:end+1])
+
 # --- 採点処理 ---
 if do_eval:
     if not problem or not student:
@@ -77,33 +98,30 @@ if do_eval:
 
     prompt = build_prompt(problem, student, reference, strictness)
 
-    try:
-        with st.spinner("Gemini が採点中…"):
-            # まず pro-latest を試す
-            model = genai.GenerativeModel(PRIMARY_MODEL, generation_config={"temperature": 0})
-            resp = model.generate_content(prompt, request_options={"timeout": 30})
-    except Exception as e1:
-        # pro がダメなら flash に自動フォールバック
+    text = None
+    used_model = PRIMARY_MODEL
+    with st.spinner("Gemini が採点中…"):
         try:
-            with st.spinner("Gemini が採点中…（フォールバック）"):
-                model = genai.GenerativeModel(FALLBACK_MODEL, generation_config={"temperature": 0})
-                resp = model.generate_content(prompt, request_options={"timeout": 30})
-        except Exception as e2:
-            st.error(f"❌ API呼び出しでエラー: {e1}\n（フォールバックも失敗）{e2}")
-            st.stop()
+            text = call_gemini_v1(prompt, PRIMARY_MODEL, timeout=30)
+        except Exception as e1:
+            # pro が失敗したら flash にフォールバック
+            used_model = FALLBACK_MODEL
+            try:
+                text = call_gemini_v1(prompt, FALLBACK_MODEL, timeout=30)
+            except Exception as e2:
+                st.error(f"❌ API呼び出し失敗\n- {PRIMARY_MODEL}: {e1}\n- {FALLBACK_MODEL}: {e2}")
+                st.stop()
 
-    text = (getattr(resp, "text", "") or "").strip()
     try:
-        start = text.find("{")
-        end = text.rfind("}")
-        data = json.loads(text[start:end+1])
+        data = parse_json_loose(text)
     except Exception:
         st.error("❌ 採点結果の解析に失敗しました。モデルの生出力を表示します。")
-        st.code(text)
+        with st.expander("モデルの生出力"):
+            st.code(text or "", language="json")
         st.stop()
 
     # --- 結果表示 ---
-    st.success("✅ 採点完了")
+    st.success(f"✅ 採点完了（{used_model}）")
     st.metric("スコア", f"{data.get('score', 0)} / 10")
 
     st.subheader("採点基準（Rubric）")
@@ -127,4 +145,4 @@ if do_eval:
         st.write(data.get("reasoning", ""))
 
 st.markdown("---")
-st.caption("Powered by Streamlit × Google Gemini ・ 問題データ: constants.json")
+st.caption("Powered by Streamlit × Google Gemini（REST / v1） ・ 問題データ: constants.json")
