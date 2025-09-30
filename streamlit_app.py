@@ -4,7 +4,7 @@ import requests
 import streamlit as st
 
 # ================= 基本設定 =================
-st.set_page_config(page_title="試験対策アプリ", page_icon="📝", layout="centered")
+st.set_page_config(page_title="第3節 下水道の種類｜短答100字演習", page_icon="📝", layout="centered")
 
 # （ストレージ監視で固まる環境向けの保険）
 os.environ.setdefault("STREAMLIT_SERVER_FILE_WATCHER_TYPE", "none")
@@ -14,7 +14,7 @@ if not API_KEY:
     st.error("❌ Secrets に GEMINI_API_KEY（または GOOGLE_API_KEY）がありません。")
     st.stop()
 
-# 優先順に試すモデル（手持ちのキーで404が出た場合に備えて幅広く）
+# 優先順に試すモデル
 PREFERRED = [
     "gemini-1.5-pro-latest",
     "gemini-1.5-flash-latest",
@@ -26,21 +26,19 @@ PREFERRED = [
 
 # ================ ユーティリティ ================
 def list_models(api_ver: str, timeout=15) -> list[str]:
-    """指定APIバージョンで generateContent 可能なモデル名を列挙"""
     url = f"https://generativelanguage.googleapis.com/{api_ver}/models?key={API_KEY}"
     r = requests.get(url, timeout=timeout)
     r.raise_for_status()
     j = r.json()
     names = []
     for m in j.get("models", []):
-        name = (m.get("name") or "").split("/")[-1]  # models/xxx → xxx
+        name = (m.get("name") or "").split("/")[-1]
         methods = m.get("supportedGenerationMethods") or m.get("supported_generation_methods") or []
         if "generateContent" in methods:
             names.append(name)
     return names
 
 def call_gemini(prompt: str, api_ver: str, model: str, timeout=30) -> str:
-    """/v1 or /v1beta の generateContent を直接叩く"""
     url = f"https://generativelanguage.googleapis.com/{api_ver}/models/{model}:generateContent?key={API_KEY}"
     payload = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
                "generationConfig": {"temperature": 0}}
@@ -48,10 +46,7 @@ def call_gemini(prompt: str, api_ver: str, model: str, timeout=30) -> str:
     if r.status_code >= 400:
         raise RuntimeError(f"{api_ver}/{model}: HTTP {r.status_code}: {r.text[:400]}")
     j = r.json()
-    try:
-        return j["candidates"][0]["content"]["parts"][0]["text"]
-    except Exception as e:
-        raise RuntimeError(f"{api_ver}/{model}: 応答解析エラー: {e} / Raw: {str(j)[:400]}")
+    return j["candidates"][0]["content"]["parts"][0]["text"]
 
 def parse_json_loose(text: str) -> dict:
     t = (text or "").strip()
@@ -78,7 +73,7 @@ except json.JSONDecodeError as e:
 # ================ 診断UI ================
 with st.expander("🔧 診断（まずはここを開いて確認）", expanded=True):
     st.write("- ここで **利用可能モデル** を実際に取得し、採点時の候補に使います。")
-    cols = st.columns(3)
+    cols = st.columns(2)
     if "ALL_MODELS" not in st.session_state:
         st.session_state.ALL_MODELS = []
     if "API_VER" not in st.session_state:
@@ -104,13 +99,13 @@ with st.expander("🔧 診断（まずはここを開いて確認）", expanded=
         except Exception as e:
             st.error(f"v1beta 取得失敗: {e}")
 
-    # 一覧が空ならPREFERREDで埋めておく（404でも一応試行できる）
     if not st.session_state.ALL_MODELS:
         st.info("モデル一覧が未取得なので、既定候補（PREFERRED）で試行します。")
         st.code("\n".join(PREFERRED))
 
 # ================ メインUI ================
-st.title("📝試験対策アプリ")
+st.title("第3節 下水道の種類｜短答100字演習")
+st.caption("出典：§1.3.1 下水道の種類（第3節 下水道の種類）")
 st.markdown("出題を選んで受験者の解答を入力すると、AI が **10点満点** で採点します。")
 
 # ===== 出題ナビ（戻る／次へ 付き） =====
@@ -162,21 +157,20 @@ selected_question = ID_TO_Q[current_id]
 problem = selected_question.get("text", "")
 reference_default = selected_question.get("modelAnswer", "")
 
-with st.expander("📘 模範解答", expanded=False):
-    reference = st.text_area("模範解答", value=reference_default, height=140, key=f"ref_{current_id}")
-student = st.text_area("🧑‍🎓 あなたの解答", height=200, placeholder="ここに回答を入力…", key=f"ans_{current_id}")
-
-
+# --- 問題文と入力欄（1つだけ） ---
 st.subheader("🧩 問題文")
 st.write(problem)
 
 with st.expander("📘 模範解答", expanded=False):
-    reference = st.text_area("模範解答", value=reference_default, height=140)
+    reference = st.text_area("模範解答", value=reference_default, height=140, key=f"ref_{current_id}")
 
-student = st.text_area("🧑‍🎓 あなたの解答", height=200, placeholder="ここに回答を入力…")
+student = st.text_area("🧑‍🎓 あなたの解答", height=200,
+                       placeholder="ここに回答を入力…", key=f"ans_{current_id}")
+
 strictness = st.slider("採点の厳しさ（1=寛容, 5=非常に厳格）", 1, 5, 3)
 do_eval = st.button("採点する")
 
+# ================ プロンプト生成 ================
 def build_prompt(problem, student, reference, strictness):
     return f"""
 あなたは日本語の厳格な採点者です。与えられた問題文と受験者の解答を評価し、JSONで出力してください。
@@ -198,15 +192,10 @@ if do_eval:
         st.stop()
 
     prompt = build_prompt(problem, student, reference, strictness)
-
-    # 試すAPIバージョンとモデルの組み合わせを作成
     api_versions = [st.session_state.API_VER] if st.session_state.ALL_MODELS else ["v1", "v1beta"]
     model_pool = (st.session_state.ALL_MODELS or PREFERRED)
 
-    errors = []
-    text = None
-    used = None
-
+    errors, text, used = [], None, None
     with st.spinner("Gemini が採点中…"):
         for ver in api_versions:
             for m in model_pool:
