@@ -188,4 +188,96 @@ def build_prompt(problem, student, reference, strictness):
     return f"""
 あなたは日本語の厳格な採点者です。与えられた問題文と受験者の解答を評価し、JSONで出力してください。
 出力スキーマ（余計なテキストは禁止）:
-{{"s
+{{"score": <0-10>,"rubric":"...","strengths":["..."],"weaknesses":["..."],"improvements":["..."],"reasoning":"..."}}
+採点の厳しさ: {strictness}
+問題文:
+{problem}
+受験者の解答:
+{student}
+模範解答（任意、空なら参考にしない）:
+{reference}
+"""
+
+# ================ 採点処理 ================
+if do_eval:
+    if not problem or not student:
+        st.warning("⚠️ 問題文と受験者の解答は必須です。")
+        st.stop()
+
+    prompt = build_prompt(problem, student, reference, strictness)
+
+    try:
+        with st.spinner("Gemini が採点中…"):
+            text = call_gemini(prompt, API_VER, MODEL_NAME, timeout=30)
+    except Exception as e:
+        st.error("❌ API呼び出しに失敗しました。")
+        with st.expander("エラー詳細"):
+            st.code(str(e))
+            st.markdown(
+                "- 403/404 の場合：AI Studio の API キー種別・制限（Generative Language API に限定/許可）を確認してください。  \n"
+                "- ブラウザで `/v1/models?key=...` を開くと、利用可能モデルの有無がすぐ確認できます。"
+            )
+        st.stop()
+
+    try:
+        data = parse_json_loose(text)
+    except Exception:
+        st.error("❌ 採点結果の解析に失敗しました。モデルの生出力を表示します。")
+        with st.expander("モデルの生出力"):
+            st.code(text or "", language="json")
+        st.stop()
+
+    # ======= 結果表示（整形版） =======
+    st.success(f"✅ 採点完了（{API_VER} / {MODEL_NAME}）")
+
+    score_val = data.get("score", 0)
+    st.markdown(
+        f"""
+        <div style="font-size:28px;font-weight:700;margin:8px 0 2px 0;">スコア</div>
+        <div style="font-size:42px;font-weight:800;line-height:1;">{score_val} / 10</div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.markdown("### 採点基準（Rubric）")
+    st.write(data.get("rubric", ""))
+
+    def norm_list(x):
+        if x is None: return []
+        if isinstance(x, str): return [x]
+        if isinstance(x, (list, tuple)): return [str(i) for i in x if str(i).strip()]
+        return [str(x)]
+
+    def render_bullets(items):
+        if not items:
+            st.markdown("- （記載なし）")
+            return
+        st.markdown("\n".join([f"- {i}" for i in items]))
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("### 👍 良かった点")
+        render_bullets(norm_list(data.get("strengths")))
+    with col2:
+        st.markdown("### ⚠️ 不足・誤り")
+        render_bullets(norm_list(data.get("weaknesses")))
+
+    st.markdown("### 🛠 改善提案")
+    render_bullets(norm_list(data.get("improvements")))
+
+    with st.expander("🧠 採点ロジック（理由）", expanded=False):
+        st.write(data.get("reasoning", ""))
+
+    # 箇条書きの余白調整
+    st.markdown(
+        """
+        <style>
+        ul { margin-top: 0.25rem; margin-bottom: 0.75rem; }
+        li { margin: 0.25rem 0; }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+st.markdown("---")
+st.caption("Powered by Streamlit × Google Gemini（REST / 自動モデル検出） ・ 問題データ: constants.json")
