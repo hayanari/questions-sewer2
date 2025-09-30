@@ -4,7 +4,7 @@ import requests
 import streamlit as st
 
 # ================= 基本設定 =================
-st.set_page_config(page_title="第3節 下水道の種類｜短答100字演習", page_icon="📝", layout="centered")
+st.set_page_config(page_title="総合技士試験対策AIアプリ｜短答100字演習", page_icon="📝", layout="centered")
 os.environ.setdefault("STREAMLIT_SERVER_FILE_WATCHER_TYPE", "none")
 
 API_KEY = st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
@@ -110,8 +110,8 @@ if not detected:
 API_VER, MODEL_NAME = detected  # 例 ("v1", "gemini-1.5-pro-latest")
 
 # ================ メインUI ================
-st.title("第3節 下水道の種類｜短答100字演習")
-st.caption(f"出典：§1.3.1 下水道の種類（第3節 下水道の種類）｜使用中: {API_VER} / {MODEL_NAME}")
+st.title("総合技士試験対策AIアプリ｜短答100字演習")
+st.caption(f"出典：下水道管路管理マニュアル｜使用中: {API_VER} / {MODEL_NAME}")
 st.markdown("出題を選んで受験者の解答を入力すると、AI が **10点満点** で採点します。")
 
 # ===== 出題ナビ（戻る／次へ 付き） =====
